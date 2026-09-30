@@ -1,4 +1,4 @@
-const { Plugin, ItemView } = require('obsidian');
+const { Plugin, ItemView, debounce } = require('obsidian');
 
 const VIEW = 'claude-limits';
 
@@ -20,9 +20,17 @@ class LimitsView extends ItemView {
   getViewType() { return VIEW; }
   getDisplayText() { return 'Claude limits'; }
   getIcon() { return 'gauge'; }
-  async onOpen() { await this.show(); }
+  async onOpen() {
+    // srcdoc never reads the folder again, and copy rewrites it after every Claude Code turn
+    const refresh = debounce(() => this.show(this.query), 1000, true);
+    this.registerEvent(this.app.vault.on('modify', file => {
+      if (file.path.startsWith(`${this.plugin.folder}/`)) refresh();
+    }));
+    await this.show();
+  }
 
   async show(query = 'reset=countdown') {
+    this.query = query;
     const { adapter } = this.app.vault;
     const DIR = this.plugin.folder;
     const files = {};
