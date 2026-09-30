@@ -3,11 +3,10 @@ const { Plugin, ItemView, Platform, debounce } = require('obsidian');
 const VIEW = 'claude-limits';
 
 // Obsidian blocks every script an iframe loads from app://, so the page arrives whole in srcdoc.
-// Its loader appends a <script src> per file; this hands it the file's text instead.
-const shim = files => `<script>
-const FILES = ${JSON.stringify(files).replace(/</g, '\\u003c')};
+// Its loader appends a <script src> per file; this hands it the file's text from the frame instead.
+const shim = `<script>
 document.head.append = function (el) {
-  const text = FILES[el.src.split('/').pop()];
+  const text = frameElement.files[el.src.split('/').pop().split('?')[0]];
   el.removeAttribute('src');
   if (text !== undefined) el.text = text;
   Element.prototype.append.call(this, el);
@@ -27,19 +26,23 @@ class LimitsView extends ItemView {
   getDisplayText() { return 'Claude limits'; }
   getIcon() { return 'gauge'; }
   async onOpen() {
-    // srcdoc never reads the files again, and they change after every Claude Code turn
-    const refresh = debounce(() => this.show(this.query), 1000, true);
+    // srcdoc never reads the files again, and they change after every Claude Code turn:
+    // new data goes to the running page, a new page or limits.js loads the view anew
+    const page = debounce(() => this.show(this.query), 1000, true);
+    const data = debounce(() => this.update(), 1000, true);
+    const changed = name => {
+      if (name === 'index.html' || name === 'limits.js') page();
+      else if (name?.endsWith('.js')) data();
+    };
     const { plugin } = this;
     if (plugin.repo) {
       for (const dir of [plugin.dataDir, plugin.repo]) {
-        const watcher = require('fs').watch(dir, (e, name) => {
-          if (name?.endsWith('.js') || name === 'index.html') refresh();
-        });
+        const watcher = require('fs').watch(dir, (e, name) => changed(name));
         this.register(() => watcher.close());
       }
     } else {
       this.registerEvent(this.app.vault.on('modify', file => {
-        if (file.path.startsWith(`${plugin.folder}/`)) refresh();
+        if (file.path.startsWith(`${plugin.folder}/`)) changed(file.name);
       }));
     }
     await this.show();
@@ -50,7 +53,7 @@ class LimitsView extends ItemView {
     const y = this.frame?.contentWindow?.scrollY;
     const { page, files } = await this.plugin.read();
     const doc = page
-      .replace('<script src="limits.js"></script>', () => `${shim(files)}<script>${files['limits.js']}</script>${drawn}`)
+      .replace('<script src="limits.js"></script>', () => `${shim}<script>${files['limits.js']}</script>${drawn}`)
       // srcdoc has no query string, so the range, reset, line and theme come from the frame, where a click keeps them for the next reload
       .replaceAll('new URLSearchParams(location.search)', 'new URLSearchParams(frameElement.dataset.query)')
       // about:srcdoc takes no other URL
@@ -60,12 +63,19 @@ class LimitsView extends ItemView {
     this.contentEl.style.padding = '0';
     const frame = this.frame = this.contentEl.createEl('iframe', { attr: { style: 'display:block;width:100%;height:100%;border:0' } });
     frame.dataset.query = query;
+    frame.files = files;
     frame.addEventListener('load', () => frame.contentDocument.addEventListener('click', e => {
       const a = e.target.closest('nav a[href]');
       if (a) this.query = frame.dataset.query = a.getAttribute('href').slice(1);
     }));
     if (y) frame.addEventListener('draw', () => frame.contentWindow.scrollTo(0, y), { once: true });
     frame.srcdoc = doc;
+  }
+
+  async update() {
+    this.frame.files = (await this.plugin.read()).files;
+    // a page still loading reads the new files itself
+    this.frame.contentWindow.refresh?.();
   }
 }
 

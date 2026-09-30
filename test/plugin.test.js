@@ -49,26 +49,26 @@ async function render(app, data) {
   await plugin.onload();
   const view = plugin.make({ app });
   await view.show();
-  return view.frame.srcdoc;
+  return { doc: view.frame.srcdoc, files: view.frame.files };
 }
 
 test('the page loads its scripts from the shim, not from app://', async () => {
-  const doc = await page('claude-limits', null);
+  const { doc, files } = await page('claude-limits', null);
   assert.ok(!doc.includes('<script src="limits.js"></script>'));
-  assert.ok(doc.includes('const FILES = '));
-  assert.ok(doc.includes('S.push({\\"ts\\":1});'));
+  assert.ok(doc.includes('frameElement.files'));
+  assert.equal(files['hw.js'], 'S.push({"ts":1});');
 });
 
 test('the query comes in without location.search', async () => {
-  const doc = await page('claude-limits', null);
+  const { doc } = await page('claude-limits', null);
   assert.ok(!doc.includes('new URLSearchParams(location.search)'));
   assert.ok(doc.includes('new URLSearchParams(frameElement.dataset.query)'));
   assert.ok(!doc.includes('history.replaceState'));
 });
 
 test('the folder comes from data.json', async () => {
-  const doc = await page('_claude/claude-limits', { folder: '_claude/claude-limits' });
-  assert.ok(doc.includes('const FILES = '));
+  const { files } = await page('_claude/claude-limits', { folder: '_claude/claude-limits' });
+  assert.equal(files['hw.js'], 'S.push({"ts":1});');
 });
 
 // a data folder on disk, with a snapshot the vault copy does not have
@@ -80,26 +80,25 @@ function dataDir() {
 }
 
 test('on the Mac the page and data come from the clone and the data folder', async () => {
-  const doc = await render(vault({}), { folder: 'claude-limits', repo: REPO, dataDir: dataDir() });
-  assert.ok(doc.includes('S.push({\\"ts\\":2});'));
+  const { doc, files } = await render(vault({}), { folder: 'claude-limits', repo: REPO, dataDir: dataDir() });
+  assert.equal(files['hw.js'], 'S.push({"ts":2});');
   assert.ok(doc.includes('new URLSearchParams(frameElement.dataset.query)'));
-  assert.ok(!doc.includes('.hw-tally'));
+  assert.ok(!('.hw-tally.jsonl' in files));
 });
 
 test('a clone as ~/… is found under this account\'s home', async () => {
   const home = process.env.HOME;
   process.env.HOME = path.dirname(REPO);
   try {
-    const doc = await render(vault({}), { repo: `~/${path.basename(REPO)}`, dataDir: dataDir() });
-    assert.ok(doc.includes('S.push({\\"ts\\":2});'));
+    const { files } = await render(vault({}), { repo: `~/${path.basename(REPO)}`, dataDir: dataDir() });
+    assert.equal(files['hw.js'], 'S.push({"ts":2});');
   } finally { process.env.HOME = home; }
 });
 
 test('the phone reads the vault copy, whatever data.json says', async () => {
   Platform.isDesktopApp = false;
   try {
-    const doc = await page('claude-limits', { folder: 'claude-limits', repo: REPO, dataDir: dataDir() });
-    assert.ok(doc.includes('S.push({\\"ts\\":1});'));
-    assert.ok(!doc.includes('"ts\\":2'));
+    const { files } = await page('claude-limits', { folder: 'claude-limits', repo: REPO, dataDir: dataDir() });
+    assert.equal(files['hw.js'], 'S.push({"ts":1});');
   } finally { Platform.isDesktopApp = true; }
 });
