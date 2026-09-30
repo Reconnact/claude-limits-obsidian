@@ -2,7 +2,7 @@
 
 **Your Claude plan limits, right where your notes are.** The [claude-limits](https://github.com/Reconnact/claude-limits) page as a view inside Obsidian: the 5-hour window, the weekly limit and the weekly Fable limit, with their history. On the Mac, and on the iPhone from a Home Screen icon.
 
-![The claude-limits page in an Obsidian tab: three tiles for the 5-hour, weekly and Fable limits, a chart of the past week below](docs/obsidian.jpg)
+![The claude-limits page in an Obsidian tab: three tiles for the 5-hour, weekly and Fable limits, a chart of the past week below](docs/obsidian-view.jpg)
 
 - **On your phone.** Your vault's sync carries the page and its data along, so the phone shows what the Mac recorded.
 - **One tap away.** A gauge icon in the ribbon, the command `Claude limits: Open`, and the link `obsidian://claude-limits` for a Home Screen icon.
