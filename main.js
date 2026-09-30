@@ -51,17 +51,18 @@ class LimitsView extends ItemView {
     const { page, files } = await this.plugin.read();
     const doc = page
       .replace('<script src="limits.js"></script>', () => `${shim(files)}<script>${files['limits.js']}</script>${drawn}`)
-      // srcdoc has no query string, so the range, reset, line and theme come in here
-      .replaceAll('new URLSearchParams(location.search)', () => `new URLSearchParams(${JSON.stringify(query)})`);
+      // srcdoc has no query string, so the range, reset, line and theme come from the frame, where a click keeps them for the next reload
+      .replaceAll('new URLSearchParams(location.search)', 'new URLSearchParams(frameElement.dataset.query)')
+      // about:srcdoc takes no other URL
+      .replace("history.replaceState(null, '', a.href);", '');
 
     this.contentEl.empty();
     this.contentEl.style.padding = '0';
     const frame = this.frame = this.contentEl.createEl('iframe', { attr: { style: 'display:block;width:100%;height:100%;border:0' } });
+    frame.dataset.query = query;
     frame.addEventListener('load', () => frame.contentDocument.addEventListener('click', e => {
       const a = e.target.closest('nav a[href]');
-      if (!a) return;
-      e.preventDefault();
-      this.show(a.getAttribute('href').slice(1));
+      if (a) this.query = frame.dataset.query = a.getAttribute('href').slice(1);
     }));
     if (y) frame.addEventListener('draw', () => frame.contentWindow.scrollTo(0, y), { once: true });
     frame.srcdoc = doc;

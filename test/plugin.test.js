@@ -20,7 +20,7 @@ class ItemView {
     this.app = leaf.app;
     this.contentEl = {
       style: {}, empty() {},
-      createEl: () => (this.frame = { addEventListener() {} }),
+      createEl: () => (this.frame = { addEventListener() {}, dataset: {} }),
     };
   }
 }
@@ -62,7 +62,8 @@ test('the page loads its scripts from the shim, not from app://', async () => {
 test('the query comes in without location.search', async () => {
   const doc = await page('claude-limits', null);
   assert.ok(!doc.includes('new URLSearchParams(location.search)'));
-  assert.ok(doc.includes('new URLSearchParams("reset=countdown")'));
+  assert.ok(doc.includes('new URLSearchParams(frameElement.dataset.query)'));
+  assert.ok(!doc.includes('history.replaceState'));
 });
 
 test('the folder comes from data.json', async () => {
@@ -81,7 +82,7 @@ function dataDir() {
 test('on the Mac the page and data come from the clone and the data folder', async () => {
   const doc = await render(vault({}), { folder: 'claude-limits', repo: REPO, dataDir: dataDir() });
   assert.ok(doc.includes('S.push({\\"ts\\":2});'));
-  assert.ok(doc.includes('new URLSearchParams("reset=countdown")'));
+  assert.ok(doc.includes('new URLSearchParams(frameElement.dataset.query)'));
   assert.ok(!doc.includes('.hw-tally'));
 });
 
