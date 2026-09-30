@@ -30,8 +30,8 @@ class LimitsView extends ItemView {
       if (path.endsWith('.js')) files[path.split('/').pop()] = await adapter.read(path);
     const page = (await adapter.read(`${DIR}/index.html`))
       .replace('<script src="limits.js"></script>', () => `${shim(files)}<script>${files['limits.js']}</script>`)
-      // srcdoc has no query string, so the range and reset come in here
-      .replace('new URLSearchParams(location.search)', () => `new URLSearchParams(${JSON.stringify(query)})`);
+      // srcdoc has no query string, so the range, reset, line and theme come in here
+      .replaceAll('new URLSearchParams(location.search)', () => `new URLSearchParams(${JSON.stringify(query)})`);
 
     this.contentEl.empty();
     this.contentEl.style.padding = '0';
