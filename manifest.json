@@ -1,0 +1,10 @@
+{
+  "id": "claude-limits",
+  "name": "Claude limits",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Shows the claude-limits page in Obsidian, also on the phone.",
+  "author": "Hermann Witte",
+  "isDesktopOnly": false,
+  "authorUrl": "https://github.com/Reconnact/claude-limits-obsidian"
+}

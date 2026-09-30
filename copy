@@ -1,0 +1,18 @@
+#!/bin/bash
+# copy <vault> <folder> <claude-limits clone>: the page and data into the vault, for the plugin and Obsidian Sync.
+# Run by a Claude Code Stop hook after every turn; always silent.
+VAULT="$1" TO="$1/$2" REPO="$3"
+DATA="${CLAUDE_LIMITS_DIR:-/Users/Shared/claude-limits}"
+PLUGIN="$VAULT/.obsidian/plugins/claude-limits"
+HERE="$(dirname "$0")"
+{
+  [ -d "$PLUGIN" ] || exit 0
+  mkdir -p "$TO"
+  for F in "$REPO"/{index.html,limits.js} "$DATA"/*.js; do
+    [ "$F" -nt "$TO/${F##*/}" ] && cp -p "$F" "$TO/"
+  done
+  for F in "$HERE"/{main.js,manifest.json}; do
+    [ "$F" -nt "$PLUGIN/${F##*/}" ] && cp -p "$F" "$PLUGIN/"
+  done
+} </dev/null >/dev/null 2>&1
+exit 0
