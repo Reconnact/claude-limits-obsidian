@@ -31,12 +31,23 @@ echo '{"theme":"dark","hooks":{"Stop":[{"hooks":[{"type":"command","command":"sa
 ./install "$TMP/nope" --repo "$REPO" >/dev/null; check "no vault fails" "1" "$?"
 ./install "$VAULT" --repo "$TMP/nope" >/dev/null; check "no clone fails" "1" "$?"
 
-# a fresh vault
+# a fresh vault, Mac only
 ./install "$VAULT" --repo "$REPO" >/dev/null; CODE=$?
 check "exits 0" "0" "$CODE"
 check "plugin copied" "$(cat main.js)" "$(cat "$VAULT/.obsidian/plugins/claude-limits/main.js")"
 check "folder in data.json" "claude-limits" "$(jq -r .folder "$VAULT/.obsidian/plugins/claude-limits/data.json")"
+check "clone in data.json" "$REPO" "$(jq -r .repo "$VAULT/.obsidian/plugins/claude-limits/data.json")"
+check "data folder in data.json" "$CLAUDE_LIMITS_DIR" "$(jq -r .dataDir "$VAULT/.obsidian/plugins/claude-limits/data.json")"
 check "plugin turned on" '["claude-limits"]' "$(jq -c . "$VAULT/.obsidian/community-plugins.json")"
+check "no hook without --phone" "1" "$(hooks)"
+check "no vault folder without --phone" "no" "$([ -d "$VAULT/claude-limits" ] && echo yes || echo no)"
+
+# a clone under home is kept as ~/…, the same on every account
+HOME="$TMP" ./install "$VAULT" --repo "$REPO" >/dev/null
+check "clone under home as ~" "~/claude-limits" "$(jq -r .repo "$VAULT/.obsidian/plugins/claude-limits/data.json")"
+
+# for the phone
+./install "$VAULT" --repo "$REPO" --phone >/dev/null
 check "page copied" "page" "$(cat "$VAULT/claude-limits/index.html")"
 check "data copied" "S.push({});" "$(cat "$VAULT/claude-limits/hw.js")"
 check "other settings kept" "dark" "$(jq -r .theme "$SETTINGS")"
@@ -44,12 +55,12 @@ check "own Stop hook kept, one added" "2" "$(hooks)"
 check "backup written" "1" "$(jq '[.hooks.Stop[].hooks[]] | length' "$SETTINGS.bak")"
 
 # again: nothing doubles
-./install "$VAULT" --repo "$REPO" >/dev/null
+./install "$VAULT" --repo "$REPO" --phone >/dev/null
 check "second run adds no hook" "2" "$(hooks)"
 check "second run adds no plugin entry" '["claude-limits"]' "$(jq -c . "$VAULT/.obsidian/community-plugins.json")"
 
 # another folder replaces the vault's hook
-./install "$VAULT" --repo "$REPO" --folder "_claude/limits" >/dev/null
+./install "$VAULT" --repo "$REPO" --phone --folder "_claude/limits" >/dev/null
 check "new folder, still one hook for the vault" "2" "$(hooks)"
 check "data.json follows" "_claude/limits" "$(jq -r .folder "$VAULT/.obsidian/plugins/claude-limits/data.json")"
 
@@ -70,5 +81,9 @@ check "older file left alone" "vault" "$(cat "$VAULT/_claude/limits/limits.js")"
 rm -rf "$VAULT/.obsidian/plugins/claude-limits" "$VAULT/_claude"
 sh -c "$CMD" </dev/null
 check "no plugin, no folder" "no" "$([ -d "$VAULT/_claude" ] && echo yes || echo no)"
+
+# again without --phone: the vault's hook goes, the own one stays
+./install "$VAULT" --repo "$REPO" >/dev/null
+check "hook removed without --phone" "say done" "$(jq -r '[.hooks.Stop[].hooks[].command] | join(",")' "$SETTINGS")"
 
 exit $FAILED

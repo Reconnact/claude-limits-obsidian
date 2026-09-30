@@ -1,51 +1,54 @@
 #!/bin/bash
-# install <vault> [--folder claude-limits] [--repo ~/claude-limits]: the claude-limits page in an Obsidian vault. Safe to run again.
+# install <vault> [--repo ~/claude-limits] [--phone] [--folder claude-limits]: the claude-limits page in an Obsidian vault. Safe to run again.
 HERE="$(cd "$(dirname "$0")" && pwd)"
 FOLDER=claude-limits
 REPO="$HOME/claude-limits"
+DATA="${CLAUDE_LIMITS_DIR:-/Users/Shared/claude-limits}"
 SETTINGS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
 while [ $# -gt 0 ]; do
   case "$1" in
     --folder) FOLDER="$2"; shift 2 ;;
     --repo) REPO="$2"; shift 2 ;;
+    --phone) PHONE=true; shift ;;
     *) VAULT="$1"; shift ;;
   esac
 done
 
 command -v jq >/dev/null || { echo "Needs jq: brew install jq"; exit 1; }
-[ -d "$VAULT/.obsidian" ] || { echo "usage: ./install <vault> [--folder claude-limits] [--repo ~/claude-limits]"; echo "FAIL no Obsidian vault at '$VAULT'"; exit 1; }
+[ -d "$VAULT/.obsidian" ] || { echo "usage: ./install <vault> [--repo ~/claude-limits] [--phone] [--folder claude-limits]"; echo "FAIL no Obsidian vault at '$VAULT'"; exit 1; }
 [ -x "$REPO/collect" ] || { echo "FAIL no claude-limits clone at $REPO: pass --repo <path>, or set it up first: https://github.com/Reconnact/claude-limits"; exit 1; }
 VAULT="$(cd "$VAULT" && pwd)"
 REPO="$(cd "$REPO" && pwd)"
 
-# the plugin, with the folder it reads
+# the plugin, with what it reads: on the Mac the clone and the data folder, on the phone the vault folder
 PLUGIN="$VAULT/.obsidian/plugins/claude-limits"
 mkdir -p "$PLUGIN" && cp -p "$HERE"/{main.js,manifest.json} "$PLUGIN/" || { echo "FAIL could not copy the plugin to $PLUGIN"; exit 1; }
 [ -f "$PLUGIN/data.json" ] || echo '{}' > "$PLUGIN/data.json"
-jq --arg f "$FOLDER" '.folder = $f' "$PLUGIN/data.json" > "$PLUGIN/data.json.new" && mv "$PLUGIN/data.json.new" "$PLUGIN/data.json"
+case "$REPO/" in "$HOME"/*) REPO_ENTRY="~/${REPO#"$HOME"/}" ;; *) REPO_ENTRY="$REPO" ;; esac
+jq --arg f "$FOLDER" --arg r "$REPO_ENTRY" --arg d "$DATA" '.folder = $f | .repo = $r | .dataDir = $d' "$PLUGIN/data.json" > "$PLUGIN/data.json.new" && mv "$PLUGIN/data.json.new" "$PLUGIN/data.json"
 LIST="$VAULT/.obsidian/community-plugins.json"
 [ -f "$LIST" ] || echo '[]' > "$LIST"
 jq 'if index("claude-limits") then . else . + ["claude-limits"] end' "$LIST" > "$LIST.new" && mv "$LIST.new" "$LIST"
-echo "ok   plugin in $PLUGIN, reads $FOLDER/"
+echo "ok   plugin in $PLUGIN, reads $REPO and $DATA"
 
-# a Stop hook copies the page and data into the vault after every turn; one per vault
+# for the phone, a Stop hook copies the page and data into the vault after every turn; one per vault, none without --phone
 PREFIX="$(printf '%q %q ' "$HERE/copy" "$VAULT")"
 CMD="$PREFIX$(printf '%q %q' "$FOLDER" "$REPO")"
 mkdir -p "$(dirname "$SETTINGS")"
 [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
-NEW="$(jq --arg prefix "$PREFIX" --arg cmd "$CMD" '
+NEW="$(jq --arg prefix "$PREFIX" --arg cmd "$CMD" --argjson phone "${PHONE:-false}" '
   .hooks.Stop = ([.hooks.Stop[]? | .hooks |= map(select((.command // "") | startswith($prefix) | not)) | select(.hooks | length > 0)]
-                 + [{hooks: [{type: "command", command: $cmd}]}])' "$SETTINGS")" \
+                 + if $phone then [{hooks: [{type: "command", command: $cmd}]}] else [] end)' "$SETTINGS")" \
   || { echo "FAIL could not read $SETTINGS"; exit 1; }
 if [ "$NEW" != "$(jq . "$SETTINGS")" ]; then
   cp "$SETTINGS" "$SETTINGS.bak"
   printf '%s\n' "$NEW" > "$SETTINGS"
-  echo "ok   Stop hook in $SETTINGS (old settings in $SETTINGS.bak)"
-else
-  echo "ok   Stop hook already set"
+  echo "ok   Stop hook $([ "$PHONE" ] && echo set || echo removed) in $SETTINGS (old settings in $SETTINGS.bak)"
 fi
 
-"$HERE/copy" "$VAULT" "$FOLDER" "$REPO"
-echo "ok   page and data in $VAULT/$FOLDER"
+if [ "$PHONE" ]; then
+  "$HERE/copy" "$VAULT" "$FOLDER" "$REPO"
+  echo "ok   page and data in $VAULT/$FOLDER, for the phone"
+fi
 echo
 echo "Restart Obsidian and turn on Claude limits under Settings → Community plugins."

@@ -24,8 +24,9 @@ class ItemView {
     };
   }
 }
+const Platform = { isDesktopApp: true };
 const load = Module._load;
-Module._load = (req, ...rest) => req === 'obsidian' ? { Plugin, ItemView } : load(req, ...rest);
+Module._load = (req, ...rest) => req === 'obsidian' ? { Plugin, ItemView, Platform } : load(req, ...rest);
 const ClaudeLimits = require('../main.js');
 
 function vault(files) {
@@ -41,6 +42,9 @@ async function page(folder, data) {
     [`${folder}/hw.js`]: 'S.push({"ts":1});',
   };
   const app = vault(files);
+  return render(app, data);
+}
+async function render(app, data) {
   const plugin = new ClaudeLimits(app, data);
   await plugin.onload();
   const view = plugin.make({ app });
@@ -64,4 +68,37 @@ test('the query comes in without location.search', async () => {
 test('the folder comes from data.json', async () => {
   const doc = await page('_claude/claude-limits', { folder: '_claude/claude-limits' });
   assert.ok(doc.includes('const FILES = '));
+});
+
+// a data folder on disk, with a snapshot the vault copy does not have
+function dataDir() {
+  const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'claude-limits-'));
+  fs.writeFileSync(path.join(dir, 'hw.js'), 'S.push({"ts":2});');
+  fs.writeFileSync(path.join(dir, '.hw-tally.jsonl'), '{}');
+  return dir;
+}
+
+test('on the Mac the page and data come from the clone and the data folder', async () => {
+  const doc = await render(vault({}), { folder: 'claude-limits', repo: REPO, dataDir: dataDir() });
+  assert.ok(doc.includes('S.push({\\"ts\\":2});'));
+  assert.ok(doc.includes('new URLSearchParams("reset=countdown")'));
+  assert.ok(!doc.includes('.hw-tally'));
+});
+
+test('a clone as ~/… is found under this account\'s home', async () => {
+  const home = process.env.HOME;
+  process.env.HOME = path.dirname(REPO);
+  try {
+    const doc = await render(vault({}), { repo: `~/${path.basename(REPO)}`, dataDir: dataDir() });
+    assert.ok(doc.includes('S.push({\\"ts\\":2});'));
+  } finally { process.env.HOME = home; }
+});
+
+test('the phone reads the vault copy, whatever data.json says', async () => {
+  Platform.isDesktopApp = false;
+  try {
+    const doc = await page('claude-limits', { folder: 'claude-limits', repo: REPO, dataDir: dataDir() });
+    assert.ok(doc.includes('S.push({\\"ts\\":1});'));
+    assert.ok(!doc.includes('"ts\\":2'));
+  } finally { Platform.isDesktopApp = true; }
 });
