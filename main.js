@@ -15,6 +15,12 @@ document.head.append = function (el) {
 };
 </script>`;
 
+// the page is short until its data has loaded and it has drawn, so the scroll is set back only then
+const drawn = `<script>{
+const render = Limits.render;
+Limits.render = (...args) => { render(...args); frameElement.dispatchEvent(new Event('draw')); };
+}</script>`;
+
 class LimitsView extends ItemView {
   constructor(leaf, plugin) { super(leaf); this.plugin = plugin; }
   getViewType() { return VIEW; }
@@ -41,21 +47,23 @@ class LimitsView extends ItemView {
 
   async show(query = 'reset=countdown') {
     this.query = query;
+    const y = this.frame?.contentWindow?.scrollY;
     const { page, files } = await this.plugin.read();
     const doc = page
-      .replace('<script src="limits.js"></script>', () => `${shim(files)}<script>${files['limits.js']}</script>`)
+      .replace('<script src="limits.js"></script>', () => `${shim(files)}<script>${files['limits.js']}</script>${drawn}`)
       // srcdoc has no query string, so the range, reset, line and theme come in here
       .replaceAll('new URLSearchParams(location.search)', () => `new URLSearchParams(${JSON.stringify(query)})`);
 
     this.contentEl.empty();
     this.contentEl.style.padding = '0';
-    const frame = this.contentEl.createEl('iframe', { attr: { style: 'display:block;width:100%;height:100%;border:0' } });
+    const frame = this.frame = this.contentEl.createEl('iframe', { attr: { style: 'display:block;width:100%;height:100%;border:0' } });
     frame.addEventListener('load', () => frame.contentDocument.addEventListener('click', e => {
       const a = e.target.closest('nav a[href]');
       if (!a) return;
       e.preventDefault();
       this.show(a.getAttribute('href').slice(1));
     }));
+    if (y) frame.addEventListener('draw', () => frame.contentWindow.scrollTo(0, y), { once: true });
     frame.srcdoc = doc;
   }
 }
