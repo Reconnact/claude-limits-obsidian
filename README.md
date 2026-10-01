@@ -7,6 +7,7 @@
 - **On your phone.** With `--phone`, your vault's sync carries the page and its data along, so the phone shows what the Mac recorded.
 - **One tap away.** A gauge icon in the ribbon, the command `Claude limits: Open`, and the link `obsidian://claude-limits` for a Home Screen icon.
 - **Nothing extra to run.** On the Mac the view reads claude-limits' own files and follows every new snapshot. Your vault gets no generated files unless you want the phone.
+- **Inside a note.** A `claude-limits` code block puts the tiles, the chart or the token table into any note, a weekly review say.
 
 This is an add-on. [claude-limits](https://github.com/Reconnact/claude-limits) records the limits and draws the page, and brings the menu bar item. Set it up first.
 
@@ -50,6 +51,24 @@ Run it again at any time, with the same options: without `--phone` it removes th
 4. A Home Screen icon: in the Shortcuts app, make a new shortcut with the action *Open URLs* and the URL `obsidian://claude-limits`. With several vaults, use `obsidian://claude-limits?vault=<vault name>`. Then Share → *Add to Home Screen*.
 
 The page on the phone is as new as the last Claude Code turn on the Mac, plus the time sync takes.
+
+## In a note
+
+A code block shows the limits inside a note:
+
+````md
+```claude-limits
+show: tiles, chart, table
+range: 7d
+by: agent
+```
+````
+
+- `show`: any of `tiles`, `chart` and `table`, default `tiles, chart`
+- `range`: the span of the chart and the table, `5h`, `1d`, `7d`, `30d` or `all`, default `7d`
+- `by`: what the table splits by, as on the page: `folder`, `agent`, `session`, `source` or `machine`, default `folder`
+
+The block has no buttons, it shows what the note asks for, and it is as tall as what it shows. It reads the same files as the view and follows them the same way, on the Mac and on the phone.
 
 ## Updates
 

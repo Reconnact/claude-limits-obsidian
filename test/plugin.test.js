@@ -14,6 +14,10 @@ class Plugin {
   addRibbonIcon() {}
   addCommand() {}
   registerObsidianProtocolHandler() {}
+  registerMarkdownCodeBlockProcessor(language, process) { this.blocks = { language, process }; }
+}
+class MarkdownRenderChild {
+  constructor(containerEl) { this.containerEl = containerEl; }
 }
 class ItemView {
   constructor(leaf) {
@@ -26,7 +30,7 @@ class ItemView {
 }
 const Platform = { isDesktopApp: true };
 const load = Module._load;
-Module._load = (req, ...rest) => req === 'obsidian' ? { Plugin, ItemView, Platform } : load(req, ...rest);
+Module._load = (req, ...rest) => req === 'obsidian' ? { Plugin, ItemView, MarkdownRenderChild, Platform } : load(req, ...rest);
 const ClaudeLimits = require('../main.js');
 
 function vault(files) {
@@ -35,14 +39,15 @@ function vault(files) {
     read: async p => { if (!(p in files)) throw new Error(`no ${p}`); return files[p]; },
   } } };
 }
-async function page(folder, data) {
-  const files = {
+function copy(folder) {
+  return {
     [`${folder}/index.html`]: fs.readFileSync(path.join(REPO, 'index.html'), 'utf8'),
     [`${folder}/limits.js`]: fs.readFileSync(path.join(REPO, 'limits.js'), 'utf8'),
     [`${folder}/hw.js`]: 'S.push({"ts":1});',
   };
-  const app = vault(files);
-  return render(app, data);
+}
+async function page(folder, data) {
+  return render(vault(copy(folder)), data);
 }
 async function render(app, data) {
   const plugin = new ClaudeLimits(app, data);
@@ -101,4 +106,54 @@ test('the phone reads the vault copy, whatever data.json says', async () => {
     const { files } = await page('claude-limits', { folder: 'claude-limits', repo: REPO, dataDir: dataDir() });
     assert.equal(files['hw.js'], 'S.push({"ts":1});');
   } finally { Platform.isDesktopApp = true; }
+});
+
+// a claude-limits code block in a note, drawn from the vault copy
+async function block(source) {
+  const plugin = new ClaudeLimits(vault(copy('claude-limits')), null);
+  await plugin.onload();
+  assert.equal(plugin.blocks.language, 'claude-limits');
+  let child;
+  const el = { empty() {}, createEl: () => ({ addEventListener() {}, dataset: {}, style: {} }) };
+  plugin.blocks.process(source, el, { addChild: c => { child = c; } });
+  await child.show();
+  return { doc: child.frame.srcdoc, query: new URLSearchParams(child.frame.dataset.query) };
+}
+// the style a block adds to the page, and the parts of the page it leaves out
+const style = doc => doc.split('<style data-block>')[1] ?? '';
+const hidden = doc => ['.tiles', 'figure', '.projects'].filter(part => style(doc).includes(`${part} { display: none`));
+
+test('a block without options shows the tiles and the chart of the past week, without buttons', async () => {
+  const { doc, query } = await block('');
+  assert.equal(query.get('days'), '7');
+  assert.deepEqual(hidden(doc), ['.projects']);
+  assert.ok(style(doc).includes('.navs, #split { display: none'));
+});
+
+test('a block takes the range, the parts it shows and the split of the table', async () => {
+  const { doc, query } = await block('range: 30d\nshow: tiles, table\nby: agent');
+  assert.equal(query.get('days'), '30');
+  assert.equal(query.get('by'), 'agent');
+  assert.deepEqual(hidden(doc), ['figure']);
+});
+
+test('a range reaches the page in its own words', async () => {
+  for (const [range, days] of [['5h', '5h'], ['1d', '1'], ['all', 'all']])
+    assert.equal((await block(`range: ${range}`)).query.get('days'), days);
+});
+
+test('a part the block does not know is left out, and with none it knows the block shows tiles and chart', async () => {
+  assert.deepEqual(hidden((await block('show: chart, gauges')).doc), ['.tiles', '.projects']);
+  assert.deepEqual(hidden((await block('show: gauges')).doc), ['.projects']);
+});
+
+test('the chart in a block keeps its height, since the frame takes the height of what it shows', async () => {
+  assert.doesNotMatch((await block('')).doc, /clamp\([^)]*vh/);
+});
+
+test('the view keeps the buttons and the chart height of the page', async () => {
+  const { doc } = await page('claude-limits', null);
+  assert.deepEqual(hidden(doc), []);
+  assert.equal(style(doc), '');
+  assert.match(doc, /clamp\([^)]*vh/);
 });
