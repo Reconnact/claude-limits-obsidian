@@ -18,4 +18,4 @@
 - selectors a code block hides or restyles: `main`, `.tiles`, `.controls`, `.navs`, `figure`, `.projects`, `#split`
 - the chart's height as `clamp(…, …vh, …)`, which a code block cuts down to its minimum
 
-A new dependency on the page goes here and into the list in claude-limits' CLAUDE.md. `make test` reads the page from a claude-limits clone, `~/claude-limits` unless `CLAUDE_LIMITS_REPO` says otherwise.
+A new dependency on the page goes into this list. `make test` reads the page from a claude-limits clone, `~/claude-limits` unless `CLAUDE_LIMITS_REPO` says otherwise.
