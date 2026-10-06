@@ -147,6 +147,20 @@ test('a part the block does not know is left out, and with none it knows the blo
   assert.deepEqual(hidden((await block('show: gauges')).doc), ['.projects']);
 });
 
+// .x a class in the page, #x an id, a tag its opening tag; the parser adds html, head and body itself
+const found = (page, selector) =>
+  selector[0] === '.' ? new RegExp(`class="([^"]* )?${selector.slice(1)}( [^"]*)?"`).test(page)
+  : selector[0] === '#' ? page.includes(`id="${selector.slice(1)}"`)
+  : ['html', 'head', 'body'].includes(selector) || new RegExp(`<${selector}[\\s>]`).test(page);
+
+test('the page still has every part a block hides or restyles', async () => {
+  // between them the two blocks write every rule a block has
+  const docs = await Promise.all(['', 'show: table'].map(async source => (await block(source)).doc));
+  const selectors = new Set(docs.flatMap(doc => [...style(doc).matchAll(/^([^{]+)\{/gm)].flatMap(rule => rule[1].split(',').map(s => s.trim()))));
+  const page = docs[0].split('<style data-block>')[0];
+  assert.deepEqual([...selectors].filter(selector => !found(page, selector)), []);
+});
+
 test('the chart in a block keeps its height, since the frame takes the height of what it shows', async () => {
   assert.doesNotMatch((await block('')).doc, /clamp\([^)]*vh/);
 });
